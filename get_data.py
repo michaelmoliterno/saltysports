@@ -1,35 +1,43 @@
 import requests
-import requests_cache
-from bs4 import BeautifulSoup
 from datetime import date
 import json
-import logging
 
-logger = logging.getLogger("get_data")
-logger.setLevel(logging.INFO)
-fh = logging.FileHandler("get_data.log")
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-fh.setFormatter(formatter)
-logger.addHandler(fh)
+import requests_cache
+import bs4
 
-SB_NATION_CONSTANT = 235959
+import utils
+import settings
+
 # expire_after = 30 days
 requests_cache.install_cache(expire_after=2592000)
+logger = utils.make_logger("get_data")
 
 def get_sb_nation_blogs():
+
+    sb_nation_blogs = []
+
     blogs = requests.get("http://www.sbnation.com/blogs")
-    blogs_soup = BeautifulSoup(blogs.text, "html.parser")
-    team_divs = blogs_soup.findAll("div", { "class" : "m-sitedir__entry" })
+    blogs_soup = bs4.BeautifulSoup(blogs.text, "html.parser")
+    team_divs = blogs_soup.find("div", { "class" : "l-main-float" })
 
-    sb_nation_blogs = {}
-    for div in team_divs:
+    sport_type = None
 
-        blog_info = div.find('a')
-        url = blog_info['href']
-        blog_name = blog_info.find("h3", { "class" : "m-sitedir__entry-title" }).text
-        team_name = blog_info.find("div", { "class" : "m-sitedir__entry-desc" }).text
+    for i, element in enumerate(team_divs):
+        if type(element) == bs4.element.Tag:
+            if element.name == "h2":
+                sport_type = element.text
+            elif element.name == "div":
+                blog_info = element.find('a')
+                url = blog_info['href']
+                blog_name = blog_info.find("h3", { "class" : "m-sitedir__entry-title" }).text
+                team_name = blog_info.find("div", { "class" : "m-sitedir__entry-desc" }).text
 
-        sb_nation_blogs[url] = {"blog_name":blog_name, "team_name":team_name}
+                blog_dict = {"blog_url":url,
+                             "blog_name":blog_name,
+                             "team_name":team_name,
+                             "sport_type":sport_type,}
+
+                sb_nation_blogs.append(blog_dict)
 
     return sb_nation_blogs
 
@@ -41,7 +49,7 @@ def get_sb_nation_blog_history(blog_url = "http://www.talkingchop.com/", start_y
         for month in range(1,13):
             target = "{}sbn_full_archive/entries_by_month?month={}&year={}".format(blog_url,month,year)
             posts = requests.get(target)
-            posts_soup = BeautifulSoup(posts.text, "html.parser")
+            posts_soup = bs4.BeautifulSoup(posts.text, "html.parser")
             posts = posts_soup.findAll("h3", { "class" : "m-full-archive__entry-title" })
 
             for post in posts:
@@ -72,7 +80,7 @@ def get_blog_comments(blog_url, post_list, debug = False):
         post_list = post_list[:10]
 
     for post in post_list:
-        comment_id = post["post_id"] - SB_NATION_CONSTANT
+        comment_id = post["post_id"] - settings.SB_NATION_CONSTANT
         target = "{}comments/load_comments/{}".format(blog_url,comment_id)
 
 
@@ -90,22 +98,27 @@ def get_blog_comments(blog_url, post_list, debug = False):
         else:
             logger.error("{} returned non-200 status_code {}".format(target,comments.status_code))
 
-
-    if debug == True:
-        if len(comments_list) > 0:
-            print comments_list[0]["title"] + comments_list[0]["body"]
-
     return comments_list
+
+
+def get_blogs_by_sport(sb_nation_blogs, sport_type="Baseball"):
+    blogs = [blog for blog in sb_nation_blogs if blog["sport_type"] == sport_type]
+    return blogs
 
 def main():
     sb_nation_blogs = get_sb_nation_blogs()
     logger.info("Found {} SBNATION blogs".format(len(sb_nation_blogs)))
 
-    for blog_url, blog_info in sb_nation_blogs.iteritems():
-        print blog_url, blog_info["team_name"]
+    baseball_blogs = get_blogs_by_sport(sb_nation_blogs, sport_type="Baseball")
+
+    for blog in baseball_blogs:
+        print blog
+        blog_url = blog['blog_url']
 
         post_list = get_sb_nation_blog_history(blog_url, 2016, 2016)
         print "{} posts in 2016".format(len(post_list))
 
         comments_list = get_blog_comments(blog_url, post_list, debug = True)
         print "{} comments in 2016".format(len(comments_list))
+
+main()
