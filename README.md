@@ -1,1 +1,3 @@
-BLOOP
+```
+pip install -r requirements.txt
+```

@@ -10,9 +10,9 @@ import settings
 
 # expire_after = 30 days
 requests_cache.install_cache(expire_after=2592000)
-logger = utils.make_logger("get_data")
+logger = utils.make_logger("sb_nation")
 
-def get_sb_nation_blogs():
+def get_all_blogs():
 
     sb_nation_blogs = []
 
@@ -42,7 +42,7 @@ def get_sb_nation_blogs():
     return sb_nation_blogs
 
 
-def get_sb_nation_blog_history(blog_url = "http://www.talkingchop.com/", start_year = 2016, end_year = 2016):
+def get_blog_history(blog_url = "http://www.talkingchop.com/", start_year = 2016, end_year = 2016):
 
     post_list = []
     for year in range(start_year,end_year+1):
@@ -101,24 +101,6 @@ def get_blog_comments(blog_url, post_list, debug = False):
     return comments_list
 
 
-def get_blogs_by_sport(sb_nation_blogs, sport_type="Baseball"):
-    blogs = [blog for blog in sb_nation_blogs if blog["sport_type"] == sport_type]
+def get_blogs_by_sport(sb_nation_blogs, sport_type=["Baseball"]):
+    blogs = [blog for blog in sb_nation_blogs if blog["sport_type"] in sport_type]
     return blogs
-
-def main():
-    sb_nation_blogs = get_sb_nation_blogs()
-    logger.info("Found {} SBNATION blogs".format(len(sb_nation_blogs)))
-
-    baseball_blogs = get_blogs_by_sport(sb_nation_blogs, sport_type="Baseball")
-
-    for blog in baseball_blogs:
-        print blog
-        blog_url = blog['blog_url']
-
-        post_list = get_sb_nation_blog_history(blog_url, 2016, 2016)
-        print "{} posts in 2016".format(len(post_list))
-
-        comments_list = get_blog_comments(blog_url, post_list, debug = True)
-        print "{} comments in 2016".format(len(comments_list))
-
-main()
