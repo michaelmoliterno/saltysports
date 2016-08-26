@@ -1,23 +1,21 @@
-import requests
 from datetime import datetime
 import json
+import time
+import math
 
-import requests_cache
+
 import bs4
 import pymongo
 
 import utils
 import settings
 
-# expire_after = 30 days
-requests_cache.install_cache(expire_after=2592000)
 logger = utils.make_logger("sb_nation")
 
 def get_all_blogs():
 
     sb_nation_blogs = []
-
-    blogs = requests.get("http://www.sbnation.com/blogs")
+    blogs = utils.get_response_from_target("http://www.sbnation.com/blogs")
     blogs_soup = bs4.BeautifulSoup(blogs.text, "html.parser")
     team_divs = blogs_soup.find("div", { "class" : "l-main-float" })
 
@@ -53,7 +51,9 @@ def get_blog_history(blog_url = "http://www.talkingchop.com/", start_year = 2016
     for year in range(start_year,end_year+1):
         for month in month_range:
             target = "{}sbn_full_archive/entries_by_month?month={}&year={}".format(blog_url,month,year)
-            posts = requests.get(target)
+
+            posts = utils.get_response_from_target(target)
+
             posts_soup = bs4.BeautifulSoup(posts.text, "html.parser")
             posts = posts_soup.findAll("h3", { "class" : "m-full-archive__entry-title" })
 
@@ -84,24 +84,18 @@ def get_blog_comments(blog_url, post_list, debug = False):
         post_list = post_list[:10]
 
     comments_list = []
-    for post in post_list:
+    for i, post in enumerate(post_list):
+        utils.sleepy_time(factor = 1, min_sleep = 1, max_sleep = 1, log = False)
         comment_id = post["post_id"] - settings.SB_NATION_CONSTANT
         target = "{}comments/load_comments/{}".format(blog_url,comment_id)
 
+        comments = utils.get_response_from_target(target)
+        comments_json = json.loads(comments.text)
+        post_comments = comments_json["comments"]
+        comments_list += post_comments
 
-        try:
-            comments = requests.get(target)
-        except requests.exceptions.ConnectionError as e:
-            logger.error(e.message)
-            logger.error("SKIPPING COMMENTS FOR {}".format(post["post_url"]))
-
-        if comments.status_code == 200:
-            comments_json = json.loads(comments.text)
-            post_comments = comments_json["comments"]
-            comments_list += post_comments
-
-        else:
-            logger.error("{} returned non-200 status_code {}".format(target,comments.status_code))
+        if i%100 == 0:
+            logger.info("got comments for post {}".format(i+1))
 
     return comments_list
 
