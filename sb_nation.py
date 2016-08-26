@@ -50,6 +50,7 @@ def get_blog_history(blog_url = "http://www.talkingchop.com/", start_year = 2016
     post_list = []
     for year in range(start_year,end_year+1):
         for month in month_range:
+            utils.sleepy_time(factor = 1, min_sleep = 1, max_sleep = 3, log = False)
             target = "{}sbn_full_archive/entries_by_month?month={}&year={}".format(blog_url,month,year)
 
             posts = utils.get_response_from_target(target)
@@ -85,7 +86,7 @@ def get_blog_comments(blog_url, post_list, debug = False):
 
     comments_list = []
     for i, post in enumerate(post_list):
-        utils.sleepy_time(factor = 1, min_sleep = 1, max_sleep = 1, log = False)
+        utils.sleepy_time(factor = 1, min_sleep = 5, max_sleep = 10, log = False)
         comment_id = post["post_id"] - settings.SB_NATION_CONSTANT
         target = "{}comments/load_comments/{}".format(blog_url,comment_id)
 
