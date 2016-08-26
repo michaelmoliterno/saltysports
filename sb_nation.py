@@ -1,9 +1,10 @@
 import requests
-from datetime import date
+from datetime import datetime
 import json
 
 import requests_cache
 import bs4
+import pymongo
 
 import utils
 import settings
@@ -42,11 +43,15 @@ def get_all_blogs():
     return sb_nation_blogs
 
 
-def get_blog_history(blog_url = "http://www.talkingchop.com/", start_year = 2016, end_year = 2016):
+def get_blog_history(blog_url = "http://www.talkingchop.com/", start_year = 2016, end_year = 2016, debug = False):
+
+    month_range = range(1,13)
+    if debug == True:
+        month_range = range(8,9)
 
     post_list = []
     for year in range(start_year,end_year+1):
-        for month in range(1,13):
+        for month in month_range:
             target = "{}sbn_full_archive/entries_by_month?month={}&year={}".format(blog_url,month,year)
             posts = requests.get(target)
             posts_soup = bs4.BeautifulSoup(posts.text, "html.parser")
@@ -61,7 +66,7 @@ def get_blog_history(blog_url = "http://www.talkingchop.com/", start_year = 2016
                 post_id = int(deets[-2])
                 post_text = deets[-1]
 
-                post_date = date(year, month, day)
+                post_date = datetime(year, month, day, 0, 0)
 
                 post_summary = {"post_url":post_url,
                                 "post_date":post_date,
@@ -74,11 +79,11 @@ def get_blog_history(blog_url = "http://www.talkingchop.com/", start_year = 2016
     return post_list
 
 def get_blog_comments(blog_url, post_list, debug = False):
-    comments_list = []
 
     if debug == True:
         post_list = post_list[:10]
 
+    comments_list = []
     for post in post_list:
         comment_id = post["post_id"] - settings.SB_NATION_CONSTANT
         target = "{}comments/load_comments/{}".format(blog_url,comment_id)
@@ -104,3 +109,38 @@ def get_blog_comments(blog_url, post_list, debug = False):
 def get_blogs_by_sport(sb_nation_blogs, sport_type=["Baseball"]):
     blogs = [blog for blog in sb_nation_blogs if blog["sport_type"] in sport_type]
     return blogs
+
+def download_blog_comments(blogs, start_year = 2016, end_year = 2016, debug = False):
+
+    blog_posts = utils.get_mongo_collection("blog_posts")
+    blog_posts.create_index([("post_id", pymongo.ASCENDING)], unique = True)
+
+    comments = utils.get_mongo_collection("comments")
+    comments.create_index([("id", pymongo.ASCENDING)], unique = True)
+
+    for blog in blogs:
+
+        blog_url = blog['blog_url']
+        print blog_url
+        logger.info("reading {}".format(blog['blog_url']))
+
+        post_list = get_blog_history(blog_url, start_year, end_year, debug)
+        logger.info("found {} posts".format(len(post_list)))
+
+        #save the posts
+        for post in post_list:
+            try:
+                blog_posts.insert(post)
+            except pymongo.errors.DuplicateKeyError as e:
+                pass
+
+
+        comments_list = get_blog_comments(blog_url, post_list, debug)
+        logger.info("found {} comments".format(len(comments_list)))
+
+        #save the comments
+        for comment in comments_list:
+            try:
+                comments.insert(comment)
+            except pymongo.errors.DuplicateKeyError as e:
+                pass
